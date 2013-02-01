@@ -15,7 +15,8 @@ ERL = erl -boot start_clean
 
 # Edit the lines below
 MODS = gen_protocb \
-	   message_game2database
+	   message_game2database message_login2database\
+	   message_master2database
 
 # The first target in any makefile is the default target.
 # If you just type "make" then "make all" is assumed (because

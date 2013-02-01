@@ -1,6 +1,6 @@
 -module(proto_server).
 -compile(export_all).
--define(PORT, 30000).
+-define(PORT, config:get_database_game_port()).
 
 start_server(Port, ProtoModule, ProtoCbModule, CbContext) ->
 	{_PackCall, UnpackCall} = gen_protocb:gen_pack_and_cb_mod(ProtoModule, ProtoCbModule),
@@ -15,6 +15,7 @@ start_server(Port, ProtoModule, ProtoCbModule, CbContext) ->
 
 par_connect(ListenSocket, UnpackCall, CbContext) ->
 	{ok, ClientSocket} = gen_tcp:accept(ListenSocket),
+	io:format("Accept socket from ~p~n", [inet:peername(ClientSocket)]),
 	spawn(fun() -> par_connect(ListenSocket, UnpackCall, CbContext) end),
 	handle_client_loop(ClientSocket, [], UnpackCall, CbContext).
 

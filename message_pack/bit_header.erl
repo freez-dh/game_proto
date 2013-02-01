@@ -164,7 +164,6 @@ gen_all_dict_pack_unpack_func() ->
 gen_dict_pack_fun_by_type(Type) ->
 	TableDict = get(?PACK_TABLE_DICT),
 	StringType = atom_to_list(Type),
-	io:format("Type:~p~n", [StringType]),
 	Result = dict:fetch(StringType, TableDict),
 	Result.
 gen_pack_fun_by_type(Type) ->
