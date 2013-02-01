@@ -15,7 +15,7 @@ start_server(Port, ProtoModule, ProtoCbModule, CbContext) ->
 
 par_connect(ListenSocket, UnpackCall, CbContext) ->
 	{ok, ClientSocket} = gen_tcp:accept(ListenSocket),
-	io:format("Accept socket from ~p~n", [inet:peername(ClientSocket)]),
+	log:trace("Accept socket", [address, inet:peername(ClientSocket)]),
 	spawn(fun() -> par_connect(ListenSocket, UnpackCall, CbContext) end),
 	handle_client_loop(ClientSocket, [], UnpackCall, CbContext).
 

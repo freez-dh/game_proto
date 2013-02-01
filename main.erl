@@ -2,6 +2,7 @@
 -compile(export_all).
 
 set_path() ->
+	true = code:add_patha("log"),
 	true = code:add_patha("config"),
 	true = code:add_patha("proto"),
 	true = code:add_patha("message_pack"),
@@ -29,12 +30,15 @@ start_database_server() ->
 	set_path(),
 	proto_server:start_server(config:get_database_game_port(),
 		game2database, message_game2database, []),
-	io:format("Database start listen game~n", []),
+	log:trace("Database start listen game",
+		[port, config:get_database_game_port()]),
 	proto_server:start_server(config:get_database_login_port(),
 		login2database, message_login2database, []),
-	io:format("Database start listen login~n", []),
+	log:trace("Database start listen login",
+		[port, config:get_database_login_port()]),
 	proto_server:start_server(config:get_database_master_port(),
 		master2database, message_master2database, []),
-	io:format("Database start listen master~n", []),
+	log:trace("Database start listen master",
+		[port, config:get_database_master_port()]),
 	ok.
 

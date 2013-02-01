@@ -2,5 +2,5 @@
 -compile(export_all).
 
 update_db_uint(Socket, SaveId, Value) ->
-	io:format("update db uint ~p ~p~n", [SaveId, Value]),
+	log:debug("update db uint", [save_id, SaveId, value, Value]),
 	ok.
