@@ -14,16 +14,14 @@ gen_name2fun([Proto | Tail], Dict) ->
 	gen_name2fun(Tail, NewDict).
 
 gen_pack_and_cb_mod(ProtoModule, ProtoCbModule) ->
-	ProtoModule = game2database,
-	ProtoCbModule = message_game2database,
 	bit_header:gen_all_dict_pack_unpack_func(),
 	Protos = apply(ProtoModule, get_protos, []),
 	Name2PackUnpackFunc = gen_name2fun(Protos, dict:new()),
 	Id2Name = gen_protoid2name(Protos, dict:new()),
 	PackCall = fun(ProtoName, Socket, Args) ->
 			{PackFunc, _UnpackFunc} = dict:fetch(ProtoName, Name2PackUnpackFunc),
-			PackedBytes = PackFunc(Args) end,
-			% gen_tcp:send(Socket, PackedBytes) end,
+			PackedBytes = PackFunc(Args),
+			gen_tcp:send(Socket, PackedBytes) end,
 	UnpackCall = fun(ProtoId, Socket, Packet, Context) ->
 			ProtoName = dict:fetch(ProtoId, Id2Name),
 			{_PackFunc, UnpackFunc} = dict:fetch(ProtoName, Name2PackUnpackFunc),
