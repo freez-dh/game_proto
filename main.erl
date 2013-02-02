@@ -2,6 +2,8 @@
 -compile(export_all).
 
 set_path() ->
+	true = code:add_patha("save"),
+	true = code:add_patha("json"),
 	true = code:add_patha("log"),
 	true = code:add_patha("config"),
 	true = code:add_patha("proto"),
