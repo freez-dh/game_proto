@@ -1,5 +1,6 @@
 -module(player_save).
 -compile(export_all).
+-define(TEST_COUNT, 100000).
 
 make_two(Int)  when Int < 10 ->
 	[$0 | integer_to_list(Int)];
@@ -57,12 +58,18 @@ request_player_handle(Guid, _, State) ->
 			DoFunc(NewState)
 	end.
 
-save_update_handle(Guid, Args, State) ->
-	UndoneFilePath = get_undone_op_path(Guid),
-	filelib:ensure_dir(UndoneFilePath),
-	{ok, UndoneFile} = file:open(UndoneFilePath, [append]),
-	io:format(UndoneFile, "~p~n", [Args]),
-	file:close(UndoneFile),
+save_update_handle(_Guid, Args, State) ->
+	Counter = get(counter),
+	case Counter - 1 of
+		0 ->
+			io:format("Done~n", []);
+		_ ->
+			ok
+	end,
+	put(counter, Counter - 1),
+	UndoneFile = dict:fetch(undone_file, State),
+	Data = io_lib:write(Args),
+	file:write(UndoneFile, Data),
 	dict:store(has_undone_op, true, State).
 
 player_handle_loop(Guid, State) ->
@@ -85,7 +92,13 @@ guid_save_server(Guid2Pid, Pid2Guid) ->
 					From ! {send_pid, Guid, Pid},
 					guid_save_server(Guid2Pid, Pid2Guid);
 				error -> 
-					NewPid = spawn_link(fun() -> player_handle_loop(Guid, dict:new()) end),
+					NewPid = spawn_link(fun() -> 
+								put(counter, ?TEST_COUNT),
+								State = dict:new(),
+								UndoneFilePath = get_undone_op_path(Guid),
+								filelib:ensure_dir(UndoneFilePath),
+								{ok, UndoneFile} = file:open(UndoneFilePath, [append]),
+								player_handle_loop(Guid, dict:store(undone_file, UndoneFile, State)) end),
 					Guid2PidDict = dict:store(Guid, NewPid, Guid2Pid),
 					Pid2GuidDict = dict:store(NewPid, Guid, Pid2Guid),
 					From ! {send_pid, Guid, NewPid},
@@ -137,4 +150,41 @@ start_guid_save_server() ->
 				process_flag(trap_exit, true),
 				guid_save_server(Guid2Pid, Pid2Guid) end),
 	register(guid_save_server, ServerPid).
+
+test_save_update() ->
+	start_guid_save_server(),
+	Seqs = lists:seq(1, ?TEST_COUNT),
+	statistics(runtime),
+	statistics(wall_clock),
+	lists:foreach(fun(_) ->
+				save_update(41012, [1, ["41012.component_attribute.items.page.0.endure", 100]]) end, Seqs
+		),
+	{_, Runtime} = statistics(runtime),
+	{_, Walltime} = statistics(wall_clock),
+	io:format("Runtime:~p,Walltime:~p~n", [Runtime/1000, Walltime/1000]).
+
+test_a() ->
+	State = dict:new(),
+	Guid = 41012,
+	UndoneFilePath = get_undone_op_path(Guid),
+	filelib:ensure_dir(UndoneFilePath),
+	{ok, UndoneFile} = file:open(UndoneFilePath, [append]),
+	NewState = dict:store(undone_file, UndoneFile, State),
+	Seqs = lists:seq(1, ?TEST_COUNT),
+	statistics(runtime),
+	statistics(wall_clock),
+	MyPid = self(),
+	spawn(fun() ->
+		put(counter, ?TEST_COUNT),
+		lists:foreach(fun(_) ->
+					save_update_handle(Guid, [1, ["41012.component_attribute.items.page.0.endure", 100]], NewState) end, Seqs
+			),
+		MyPid ! done
+		end),
+	receive
+		done -> ok
+	end,
+	{_, Runtime} = statistics(runtime),
+	{_, Walltime} = statistics(wall_clock),
+	io:format("Runtime:~p,Walltime:~p~n", [Runtime/1000, Walltime/1000]).
 
