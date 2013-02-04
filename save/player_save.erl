@@ -9,11 +9,11 @@ make_two(Int) ->
 
 get_player_path(Guid) ->
 	Dir = make_two(Guid rem 100),
-	filename:join([Dir, integer_to_list(Guid)]).
+	filename:join(["db", Dir, integer_to_list(Guid)]).
 
 get_undone_op_path(Guid) ->
 	Dir = make_two(Guid rem 100),
-	filename:join([Dir, integer_to_list(Guid) ++ "_undone_op"]).
+	filename:join(["db", Dir, integer_to_list(Guid) ++ "_undone_op"]).
 
 save_player_handle(Guid, Data, State) ->
 	DoFunc = fun() ->

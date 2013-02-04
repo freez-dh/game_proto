@@ -148,6 +148,15 @@ unpack_string(BinValue) ->
 	Result = lists:sublist(ResultList, 1, length(ResultList) - 1),
 	{RRemain, Result}.
 
+% bytes
+pack_bytes(Result, Bytes) ->
+	PackedHeaderValue = pack_varint32(Result, size(Bytes)),
+	<<PackedHeaderValue/binary, Bytes/binary>>.
+unpack_bytes(BinValue) ->
+	{Remain, Length} = unpack_varint32(BinValue),
+	{Result, RRemain} = split_binary(Remain, Length),
+	{RRemain, Result}.
+
 %% ======================some tests==========================
 test_pack_from_file(FileName) ->
 	{ok, AllData} = file:read_file(FileName),
@@ -176,7 +185,7 @@ gen_pack_fun_by_type(Type) ->
 		uint32 -> fun pack_int32/2;
 		uint64 -> fun pack_int64/2;
 		string -> fun pack_string/2;
-		bytes -> fun pack_string/2;
+		bytes -> fun pack_bytes/2;
 		float -> fun pack_float/2;
 		vector2 -> fun(Buffer, Value) ->
 					{X, Z} = Value,
@@ -277,7 +286,7 @@ gen_unpack_fun_by_type(Type) ->
 		uint32 -> fun unpack_uint32/1;
 		uint64 -> fun unpack_uint64/1;
 		string -> fun unpack_string/1;
-		bytes -> fun unpack_string/1;
+		bytes -> fun unpack_bytes/1;
 		float -> fun unpack_float/1;
 		vector2 -> fun(Buffer) ->
 					{UnpackX, X} = unpack_float(Buffer),

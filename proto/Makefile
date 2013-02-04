@@ -15,7 +15,9 @@ ERL = erl -boot start_clean
 
 # Edit the lines below
 MODS = game2database login2database \
-	   master2database table
+	   master2database table \
+	   database2game database2login \
+	   database2master
 
 # The first target in any makefile is the default target.
 # If you just type "make" then "make all" is assumed (because
