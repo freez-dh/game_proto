@@ -1,6 +1,6 @@
 -module(player_save).
 -compile(export_all).
--define(TEST_COUNT, 100000).
+-define(TEST_COUNT, 200000).
 
 make_two(Int)  when Int < 10 ->
 	[$0 | integer_to_list(Int)];
@@ -58,19 +58,18 @@ request_player_handle(Guid, _, State) ->
 			DoFunc(NewState)
 	end.
 
-save_update_handle(_Guid, Args, State) ->
-	Counter = get(counter),
-	case Counter - 1 of
-		0 ->
-			io:format("Done~n", []);
-		_ ->
-			ok
-	end,
-	put(counter, Counter - 1),
+do_realsave(_Guid, State) ->
+	UndoneList = dict:fetch(undone_list, State),
 	UndoneFile = dict:fetch(undone_file, State),
-	Data = io_lib:write(Args),
-	file:write(UndoneFile, Data),
-	dict:store(has_undone_op, true, State).
+	JoinedStr = string:join(lists:reverse(UndoneList), "\n"),
+	file:write(UndoneFile, JoinedStr),
+	timer:send_after(500, self(), {do_realsave}),
+	dict:store(undone_list, [], State).
+
+save_update_handle(_Guid, Args, State) ->
+	[Data | []] = io_lib:format("~p", [Args]),
+	NewState = dict:update(undone_list, fun(List) -> [Data | List] end, State),
+	dict:store(has_undone_op, true, NewState).
 
 player_handle_loop(Guid, State) ->
 	receive
@@ -80,7 +79,9 @@ player_handle_loop(Guid, State) ->
 			FromPid ! {result, CallId, Result};
 		{call_noresult, Func, _FromPid, Guid, Args} ->
 			FuncName = list_to_atom(atom_to_list(Func) ++ "_handle"),
-			NewState = player_save:FuncName(Guid, Args, State)
+			NewState = player_save:FuncName(Guid, Args, State);
+		{do_realsave} ->
+			NewState = do_realsave(Guid, State)
 	end,
 	player_handle_loop(Guid, NewState).
 
@@ -93,12 +94,13 @@ guid_save_server(Guid2Pid, Pid2Guid) ->
 					guid_save_server(Guid2Pid, Pid2Guid);
 				error -> 
 					NewPid = spawn_link(fun() -> 
-								put(counter, ?TEST_COUNT),
 								State = dict:new(),
 								UndoneFilePath = get_undone_op_path(Guid),
 								filelib:ensure_dir(UndoneFilePath),
 								{ok, UndoneFile} = file:open(UndoneFilePath, [append]),
-								player_handle_loop(Guid, dict:store(undone_file, UndoneFile, State)) end),
+								NewState = dict:store(undone_list, [], State),
+								timer:send_after(500, self(), {do_realsave}),
+								player_handle_loop(Guid, dict:store(undone_file, UndoneFile, NewState)) end),
 					Guid2PidDict = dict:store(Guid, NewPid, Guid2Pid),
 					Pid2GuidDict = dict:store(NewPid, Guid, Pid2Guid),
 					From ! {send_pid, Guid, NewPid},
@@ -114,9 +116,15 @@ guid_save_server(Guid2Pid, Pid2Guid) ->
 
 %% ===============rpc===========================
 async_rpc_with_noresult(Guid, FunName, Args) ->
-	guid_save_server ! {get_pid, self(), Guid},
-	receive
-		{send_pid, Guid, Pid} ->
+	case get(Guid) of
+		undefined ->
+			guid_save_server ! {get_pid, self(), Guid},
+			receive
+				{send_pid, Guid, Pid} ->
+					put(Guid, Pid),
+					Pid ! {call_noresult, FunName, self(), Guid, Args}
+			end;
+		Pid ->
 			Pid ! {call_noresult, FunName, self(), Guid, Args}
 	end,
 	ok.
@@ -175,7 +183,6 @@ test_a() ->
 	statistics(wall_clock),
 	MyPid = self(),
 	spawn(fun() ->
-		put(counter, ?TEST_COUNT),
 		lists:foreach(fun(_) ->
 					save_update_handle(Guid, [1, ["41012.component_attribute.items.page.0.endure", 100]], NewState) end, Seqs
 			),

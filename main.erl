@@ -42,5 +42,19 @@ start_database_server() ->
 		master2database, message_master2database, []),
 	log:trace("Database start listen master",
 		[port, config:get_database_master_port()]),
+	player_save:start_guid_save_server(),
 	ok.
+
+start_db_test() ->
+	start_database_server(),
+	{ok, Socket} = gen_tcp:connect("127.0.0.1", config:get_database_game_port(), [binary]),
+	{PackCall, _UnpackCall} = gen_protocb:gen_pack_and_cb_mod(game2database, message_game2database),
+	Seqs = lists:seq(1, 100000),
+	statistics(runtime),
+	statistics(wall_clock),
+	lists:foreach(fun(_) ->
+				PackCall(update_db_uint, Socket, ["41001.component_attribute.hp.1", 10000]) end, Seqs),
+	{_, Runtime} = statistics(runtime),
+	{_, Walltime} = statistics(wall_clock),
+	io:format("Runtime:~p,Walltime:~p~n", [Runtime/1000, Walltime/1000]).
 

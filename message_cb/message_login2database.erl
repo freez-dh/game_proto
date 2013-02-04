@@ -22,8 +22,8 @@ save_player(Guid, Finished, Data) ->
 			AllList = dict:fetch(Guid, UpdateDict),
 			AllData = lists:flatten(lists:reverse(AllList)),
 			EraseDict = dict:erase(Guid, UpdateDict),
-			put(?PART_DICT, EraseDict);
-			player_save:save_player(Guid, AllData),
+			put(?PART_DICT, EraseDict),
+			player_save:save_player(Guid, AllData);
 		0 ->
 			put(?PART_DICT, UpdateDict)
 	end.
