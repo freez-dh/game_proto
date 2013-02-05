@@ -85,14 +85,14 @@ player_handle_loop(Guid, State) ->
 	end,
 	player_handle_loop(Guid, NewState).
 
-guid_save_server(Guid2Pid, Pid2Guid) ->
+guid_save_server() ->
 	receive
 		{get_pid, From, Guid} ->
-			case dict:find(Guid, Guid2Pid) of
-				{ok, Pid} ->
+			case ets:lookup(guid2save_pid, Guid) of
+				[{Guid, Pid}] ->
 					From ! {send_pid, Guid, Pid},
-					guid_save_server(Guid2Pid, Pid2Guid);
-				error -> 
+					guid_save_server();
+				[] -> 
 					NewPid = spawn_link(fun() -> 
 								State = dict:new(),
 								UndoneFilePath = get_undone_op_path(Guid),
@@ -101,44 +101,42 @@ guid_save_server(Guid2Pid, Pid2Guid) ->
 								NewState = dict:store(undone_list, [], State),
 								timer:send_after(500, self(), {do_realsave}),
 								player_handle_loop(Guid, dict:store(undone_file, UndoneFile, NewState)) end),
-					Guid2PidDict = dict:store(Guid, NewPid, Guid2Pid),
-					Pid2GuidDict = dict:store(NewPid, Guid, Pid2Guid),
+					ets:insert(guid2save_pid, {Guid, NewPid}),
 					From ! {send_pid, Guid, NewPid},
-					guid_save_server(Guid2PidDict, Pid2GuidDict)
+					guid_save_server()
 			end;
 		{'EXIT', Pid, Why} ->
-			Guid = dict:fetch(Pid, Pid2Guid),
-			Guid2PidDict = dict:erase(Guid, Guid2Pid),
-			Pid2GuidDict = dict:erase(Pid, Pid2Guid),
-			log:error("Player serve process exit", [guid, Guid, pid, Pid, why, Why]),
-			guid_save_server(Guid2PidDict, Pid2GuidDict)
+			Guids = ets:match(guid2save_pid, {'$1', Pid}),
+			lists:foreach(fun(Guid)-> ets:delete(guid2save_pid, Guid) end, Guids),
+			log:error("Player serve process exit", [guids, Guids, pid, Pid, why, Why]),
+			guid_save_server()
 	end.
 
 %% ===============rpc===========================
-async_rpc_with_noresult(Guid, FunName, Args) ->
-	case get(Guid) of
-		undefined ->
+
+get_pid_by_guid(Guid) ->
+	case ets:lookup(guid2save_pid, Guid) of
+		[] ->
 			guid_save_server ! {get_pid, self(), Guid},
 			receive
 				{send_pid, Guid, Pid} ->
-					put(Guid, Pid),
-					Pid ! {call_noresult, FunName, self(), Guid, Args}
+					Pid
 			end;
-		Pid ->
-			Pid ! {call_noresult, FunName, self(), Guid, Args}
-	end,
-	ok.
+		[{Guid, Pid}] ->
+			Pid
+	end.
+
+async_rpc_with_noresult(Guid, FunName, Args) ->
+	Pid = get_pid_by_guid(Guid),
+	Pid ! {call_noresult, FunName, self(), Guid, Args}.
 
 sync_rpc(Guid, FunName, Args) ->
-	guid_save_server ! {get_pid, self(), Guid},
+	Pid = get_pid_by_guid(Guid),
+	Id = make_ref(),
+	Pid ! {call, FunName, self(), Id, Guid, Args},
 	receive
-		{send_pid, Guid, Pid} ->
-			Id = make_ref(),
-			Pid ! {call, FunName, self(), Id, Guid, Args},
-			receive
-				{result, Id, Result} ->
-					Result
-			end
+		{result, Id, Result} ->
+			Result
 	end.
 
 %% ===============rpc interface===========================
@@ -153,10 +151,9 @@ save_update(Guid, Args) ->
 
 start_guid_save_server() ->
 	ServerPid = spawn(fun() ->
-				Guid2Pid = dict:new(),
-				Pid2Guid = dict:new(),
+				ets:new(guid2save_pid, [named_table]),
 				process_flag(trap_exit, true),
-				guid_save_server(Guid2Pid, Pid2Guid) end),
+				guid_save_server() end),
 	register(guid_save_server, ServerPid).
 
 test_save_update() ->
